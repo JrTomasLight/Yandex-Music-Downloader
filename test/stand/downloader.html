@@ -152,7 +152,7 @@ window.stand = {
   dl = dl.replace('const loadRoot = () => idb("readonly", (s) => s.get("root"));',
     'const loadRoot = async () => { const d = await navigator.storage.getDirectory(); d.queryPermission = async () => "granted"; Object.defineProperty(d, "name", { value: "Музыка" }); return d; };')
     .replace("const STALL_TIMEOUT = 45000;", "const STALL_TIMEOUT = 2000;");
-  const code = [await src("common.js"), await src("update.js"), await src("files.js"), dl, await src("library.js")].join("\n;\n");
+  const code = [await src("common.js"), await src("update.js"), await src("files.js"), dl, await src("library.js"), await src("settings.js")].join("\n;\n");
   new Function("chrome", code)(stub);
   window.__ready = true;
 })();

@@ -97,6 +97,32 @@ self.EXT = (() => {
     return "https://" + String(uri).replace(/^https?:\/\//, "").replace("%%", size);
   }
 
+  // Настройки вкладки «Настройки» (chrome.storage.local, ключ settings). Неизвестные и испорченные значения
+  // заменяются значениями по умолчанию — настройки из будущей версии не ломают эту.
+  const DEFAULTS = Object.freeze({
+    parallel: 3,          // треков одновременно: 1, 2, 3, 5
+    quality: "best",      // "best" — до 320 кбит/с, "192" — экономное
+    tags: true,           // теги ID3 в файлах
+    tagCover: "600x600",  // обложка в тегах: 400x400, 600x600, 1000x1000, "none"
+    coverFile: true,      // cover.jpg рядом с треками альбома
+  });
+  const CHOICES = { parallel: [1, 2, 3, 5], quality: ["best", "192"], tagCover: ["400x400", "600x600", "1000x1000", "none"] };
+  function normalizeSettings(s) {
+    const out = { ...DEFAULTS };
+    for (const k of Object.keys(DEFAULTS)) {
+      const v = s && s[k];
+      if (CHOICES[k] ? CHOICES[k].includes(v) : typeof v === typeof DEFAULTS[k]) out[k] = v;
+    }
+    return out;
+  }
+  async function loadSettings() {
+    try {
+      return normalizeSettings((await chrome.storage.local.get("settings")).settings);
+    } catch {
+      return { ...DEFAULTS };
+    }
+  }
+
   // 1 трек, 2 трека, 5 треков
   const plural = (n, one, few, many) => {
     const a = n % 10, b = n % 100;
@@ -129,5 +155,6 @@ self.EXT = (() => {
     return RESERVED.test(s) ? "_" + s : s;
   }
 
-  return { ACTIVE, STALE_MS, isActive, isMusicHost, pathParts, parseLink, keyOfLink, keyOf, linkUrl, coverUrl, plural, safeName };
+  return { ACTIVE, STALE_MS, isActive, isMusicHost, pathParts, parseLink, keyOfLink, keyOf, linkUrl, coverUrl, plural, safeName,
+    DEFAULTS, CHOICES, normalizeSettings, loadSettings };
 })();

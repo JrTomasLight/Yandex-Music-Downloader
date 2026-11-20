@@ -309,7 +309,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       return;
     } else if (msg.type === "links") {
       // ссылки на файлы треков — прямо перед их скачиванием
-      reply(await askSite({ cmd: "links", ids: msg.ids }).catch((e) => ({ error: e.message || String(e) })));
+      reply(await askSite({ cmd: "links", ids: msg.ids, quality: msg.quality }).catch((e) => ({ error: e.message || String(e) })));
       return;
     } else if (msg.type === "progress") {
       await setStatus({ text: msg.text });

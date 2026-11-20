@@ -1,7 +1,7 @@
 // Вкладка загрузок: пишет треки прямо в выбранную папку (без окна «Сохранить как» на каждый файл).
 // Пользуется files.js: syncFolder, writeInfo, buildId3, id3Skipper, pool.
 
-const PARALLEL = 3;     // треков одновременно
+// сколько треков качать одновременно, качество и теги — во вкладке «Настройки» (EXT.loadSettings)
 const LINK_BATCH = 10;  // ссылок на файлы за один запрос к вкладке сайта
 const $ = (id) => document.getElementById(id);
 
@@ -216,8 +216,8 @@ async function writeTrack(dir, name, resp, tag) {
 
 // ------------------------------------------------------------ обложки
 const covers = new Map(); // адрес → Promise<Uint8Array|null>
-function cover(uri) {
-  const url = EXT.coverUrl(uri);
+function cover(uri, size = "1000x1000") {
+  const url = size === "none" ? null : EXT.coverUrl(uri, size);
   if (!url) return Promise.resolve(null);
   if (!covers.has(url)) {
     if (covers.size > 40) covers.delete(covers.keys().next().value);
@@ -238,10 +238,11 @@ function cover(uri) {
 // Ссылку на файл даёт сайт — её получает сборщик во вкладке Яндекс Музыки. Просим пачкой,
 // заранее для нескольких следующих треков, но не для всего альбома: ссылки живут не вечно.
 const linkReqs = new Map(); // id → Promise<{url}|{error}>
+let linkQuality = "best";    // качество для ссылок текущей загрузки
 function requestLinks(ids) {
   const need = ids.filter((id) => !linkReqs.has(id));
   if (!need.length) return;
-  const all = chrome.runtime.sendMessage({ type: "links", ids: need })
+  const all = chrome.runtime.sendMessage({ type: "links", ids: need, quality: linkQuality })
     .then((r) => r || { error: "Вкладка Яндекс Музыки не ответила" }, (e) => ({ error: String(e.message || e) }));
   for (const id of need) {
     linkReqs.set(id, all.then((r) => (r.links && r.links[id]) || { error: r.error || "нет ссылки на файл" }));
@@ -363,6 +364,9 @@ const trackName = (t) => [t.artists, t.title].filter(Boolean).join(" — ") || `
 
 async function downloadItem(data, view) {
   const signal = activeSignal || new AbortController().signal;
+  // настройки берутся в начале каждой загрузки: изменения действуют со следующей
+  const settings = await EXT.loadSettings();
+  linkQuality = settings.quality;
   view.status("Сверяю с уже скачанным…");
   const dir = await getDir(data.root);
   const stats = { total: 0, done: 0, renamed: 0, removed: 0, kept: 0, unavailable: 0 };
@@ -389,16 +393,22 @@ async function downloadItem(data, view) {
   view.note(notes.join(", "));
   view.update(done, total, failed);
 
-  // обложка альбома — рядом с треками и в каждом файле
-  let albumCover = null;
-  if (data.kind === "album" && data.cover) {
-    albumCover = await cover(data.cover);
-    if (albumCover) {
-      try {
-        if ((await fileSize(dir, "cover.jpg")) <= 0) await writeText(dir, "cover.jpg", albumCover);
-      } catch { /* без cover.jpg */ }
-    }
+  // обложка альбома — файлом cover.jpg рядом с треками (в полном размере)
+  if (data.kind === "album" && data.cover && settings.coverFile) {
+    try {
+      if ((await fileSize(dir, "cover.jpg")) <= 0) {
+        const big = await cover(data.cover, "1000x1000");
+        if (big) await writeText(dir, "cover.jpg", big);
+      }
+    } catch { /* без cover.jpg */ }
   }
+  // теги: обложка в выбранном размере; у альбома она одна на все треки, у плейлиста у каждого своя
+  const tagFor = async (t) => {
+    if (!settings.tags) return null;
+    const pic = settings.tagCover === "none" ? null
+      : await cover(data.kind === "album" ? data.cover || t.cover : t.cover, settings.tagCover);
+    return buildId3(t, pic);
+  };
 
   let next = 0;
   async function worker() {
@@ -407,7 +417,7 @@ async function downloadItem(data, view) {
       const t = jobs[i];
       requestLinks(jobs.slice(i, i + LINK_BATCH).map((x) => x.id));
       try {
-        const tag = buildId3(t, albumCover || (await cover(t.cover)));
+        const tag = await tagFor(t);
         t.file = await saveTrack(dir, t, tag);
         done++;
       } catch (e) {
@@ -425,7 +435,7 @@ async function downloadItem(data, view) {
       view.update(done, total - (unavailable - stats.unavailable), failed);
     }
   }
-  await Promise.all(Array.from({ length: PARALLEL }, worker));
+  await Promise.all(Array.from({ length: settings.parallel }, worker));
   checkCancel();
   view.status("Записываю сведения…");
   const r = { done, total: total - (unavailable - stats.unavailable), failed, fresh: done - stats.done, unavailable };

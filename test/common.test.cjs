@@ -85,3 +85,22 @@ test("linkUrl и coverUrl", () => {
   assert.equal(EXT.plural(11, "трек", "трека", "треков"), "треков");
   assert.equal(EXT.plural(22, "трек", "трека", "треков"), "трека");
 });
+
+test("настройки: значения по умолчанию и защита от мусора", async () => {
+  const plain = (v) => JSON.parse(JSON.stringify(v));
+  assert.deepEqual(plain(EXT.normalizeSettings(undefined)), plain(EXT.DEFAULTS));
+  assert.deepEqual(plain(EXT.normalizeSettings({ parallel: 5, quality: "192", tags: false, tagCover: "none", coverFile: false })),
+    { parallel: 5, quality: "192", tags: false, tagCover: "none", coverFile: false });
+  // неизвестные и испорченные значения — по умолчанию
+  const s = plain(EXT.normalizeSettings({ parallel: 40, quality: "flac", tags: "да", tagCover: "1x1", extra: 1 }));
+  assert.deepEqual(s, plain(EXT.DEFAULTS));
+});
+
+test("loadSettings: из storage, а без storage — по умолчанию", async () => {
+  const { loadScripts } = require("./stub.cjs");
+  const plain = (v) => JSON.parse(JSON.stringify(v));
+  const withStore = loadScripts(["common.js"], { chrome: { storage: { local: { get: async () => ({ settings: { parallel: 1 } }) } } } }).EXT;
+  assert.equal((await withStore.loadSettings()).parallel, 1);
+  const broken = loadScripts(["common.js"], { chrome: { storage: { local: { get: async () => { throw new Error("нет"); } } } } }).EXT;
+  assert.deepEqual(plain(await broken.loadSettings()), plain(broken.DEFAULTS));
+});

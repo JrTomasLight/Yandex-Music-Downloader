@@ -176,6 +176,16 @@ test("ссылки на файлы: лучший mp3, нет прав, ошиб�
   assert.match(r.links["3"].error, /ошибкой 500/);
   assert.equal(env.calls.filter((c) => c.includes("/tracks/3/")).length, 4);
   assert.match(r.links["4"].error, /не дал ссылку/);
+  // экономное качество — 192, а если есть только 320 — что есть
+  const eco = plain(await env.ask({ cmd: "links", ids: ["1"], quality: "192" }));
+  assert.deepEqual(eco.links["1"], { url: "https://s1.strm.yandex.net/192.mp3", bitrate: 192 });
+});
+
+test("экономное качество, когда есть только 320", async () => {
+  const env = makeEnv([[/GET \/tracks\/1\/download-info/, () => [
+    { codec: "mp3", direct: true, bitrateInKbps: 320, downloadInfoUrl: "https://s/320.mp3" }]]]);
+  const r = plain(await env.ask({ cmd: "links", ids: ["1"], quality: "192" }));
+  assert.equal(r.links["1"].bitrate, 320);
 });
 
 test("альбомы исполнителя: постранично, сборники отдельно", async () => {

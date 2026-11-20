@@ -184,7 +184,24 @@
   .lib-row button { padding:5px 12px; font-size:13px; flex:none; }
   .lib-empty { color:var(--muted); text-align:center; padding:18px 0 8px; margin:0; }
 
+  /* настройки */
+  .prefs { padding:6px 16px 10px; }
+  .prefs h3 { font-size:13px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin:14px 0 4px; }
+  .pref { display:flex; align-items:center; gap:16px; padding:10px 0; border-top:1px solid var(--line); }
+  .prefs h3 + .pref { border-top-color:transparent; }
+  .pref-text { flex:1; min-width:0; }
+  .pref-text b { display:block; font-weight:600; }
+  .pref-text small { display:block; color:var(--muted); font-size:12px; }
+  .pref.off { opacity:.5; }
+  .seg { display:inline-flex; flex:none; background:var(--chip); border-radius:999px; padding:3px; gap:2px; }
+  .seg button { padding:4px 12px; font-size:13px; background:none; color:var(--muted); }
+  .seg button:hover:not(:disabled) { color:var(--fg); filter:none; }
+  .seg button[aria-checked="true"] { background:var(--accent); color:var(--on-accent); font-weight:600; }
+  .check { flex:none; width:20px; height:20px; accent-color:var(--accent); cursor:pointer; margin:0; }
+  #prefsNote { color:var(--muted); font-size:12px; margin:8px 2px 0; min-height:18px; }
+
   @media (max-width:480px) {
+    .pref { flex-wrap:wrap; }
     header { flex-wrap:wrap; }
     .links-top { order:3; }
     .lib-row { flex-wrap:wrap; }
@@ -245,6 +262,7 @@
   <nav class="tabs">
     <button type="button" data-tab="loads" class="on">Загрузки</button>
     <button type="button" data-tab="library">Мои загрузки<span class="count" id="libCount"></span></button>
+    <button type="button" data-tab="settings">Настройки</button>
   </nav>
 
   <div id="tab-loads">
@@ -279,6 +297,39 @@
     </section>
   </div>
 
+  <div id="tab-settings" hidden>
+    <section class="card prefs">
+      <h3>Загрузка</h3>
+      <div class="pref">
+        <div class="pref-text"><b>Сколько треков качать сразу</b>
+          <small>Если загрузка часто обрывается (медленный интернет, VPN), поставьте меньше.</small></div>
+        <div class="seg" role="radiogroup" data-pref="parallel" aria-label="Сколько треков качать сразу"></div>
+      </div>
+      <div class="pref">
+        <div class="pref-text"><b>Качество mp3</b>
+          <small>«Лучшее» — до 320 кбит/с, сколько даёт сайт. «Экономное» — 192 кбит/с, файлы примерно в полтора раза меньше.</small></div>
+        <div class="seg" role="radiogroup" data-pref="quality" aria-label="Качество mp3"></div>
+      </div>
+      <h3>Теги и обложки</h3>
+      <div class="pref">
+        <div class="pref-text"><b>Записывать теги</b>
+          <small>Название, исполнитель, альбом, год и номер трека внутри файла — их показывают плееры и Проводник.</small></div>
+        <input class="check" type="checkbox" data-pref="tags" aria-label="Записывать теги">
+      </div>
+      <div class="pref" id="tagCoverRow">
+        <div class="pref-text"><b>Обложка в тегах</b>
+          <small>Чем больше картинка, тем чётче обложка в плеере и тем больше каждый файл.</small></div>
+        <div class="seg" role="radiogroup" data-pref="tagCover" aria-label="Обложка в тегах"></div>
+      </div>
+      <div class="pref">
+        <div class="pref-text"><b>Файл cover.jpg в папке альбома</b>
+          <small>Обложка альбома в полном размере рядом с треками.</small></div>
+        <input class="check" type="checkbox" data-pref="coverFile" aria-label="Файл cover.jpg в папке альбома">
+      </div>
+      <p id="prefsNote">Действуют со следующей загрузки. Уже скачанные треки не меняются.</p>
+    </section>
+  </div>
+
   <footer>
     <p>Не закрывайте эту вкладку, пока идёт загрузка. Следующие альбомы и плейлисты можно добавлять кнопкой расширения,
       кнопкой «Скачать» на странице альбома или плейлиста или правой кнопкой мыши по ссылке. Они встанут в очередь.</p>
@@ -296,5 +347,6 @@
 <script src="files.js"></script>
 <script src="downloader.js"></script>
 <script src="library.js"></script>
+<script src="settings.js"></script>
 </body>
 </html>

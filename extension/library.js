@@ -54,8 +54,7 @@ function jobLabel(s) {
 // ------------------------------------------------------------ вкладки «Загрузки» / «Мои загрузки»
 function showTab(name) {
   for (const b of document.querySelectorAll(".tabs button")) b.classList.toggle("on", b.dataset.tab === name);
-  $("tab-loads").hidden = name !== "loads";
-  $("tab-library").hidden = name !== "library";
+  for (const b of document.querySelectorAll(".tabs button")) $("tab-" + b.dataset.tab).hidden = b.dataset.tab !== name;
   try { localStorage.setItem("tab", name); } catch { /* без запоминания */ }
   if (name === "library") openLibrary();
 }
@@ -485,5 +484,5 @@ chrome.storage.onChanged.addListener((ch, area) => {
     root = root || saved;
     await loadLibrary();
   }
-  showTab(tab === "library" ? "library" : "loads");
+  showTab(["library", "settings"].includes(tab) ? tab : "loads");
 })();

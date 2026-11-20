@@ -284,14 +284,17 @@
   }
 
   // ---------------------------------------------------------------- ссылки на файлы
-  // Прямая ссылка на mp3 лучшего качества, которую сайт сам отдаёт этому пользователю.
-  async function linkFor(id) {
+  // Прямая ссылка на mp3, которую сайт сам отдаёт этому пользователю.
+  // quality "best" — самый высокий битрейт; "192" — самый высокий не выше 192 (если такого нет — самый низкий).
+  async function linkFor(id, quality) {
     try {
       const list = await api(`/tracks/${encodeURIComponent(id)}/download-info?direct=true`);
       const mp3 = (list || []).filter((x) => x && x.codec === "mp3" && x.direct && x.downloadInfoUrl && !x.preview);
       if (!mp3.length) return { error: "сайт не дал ссылку на файл этого трека" };
       mp3.sort((x, y) => (y.bitrateInKbps || 0) - (x.bitrateInKbps || 0));
-      return { url: mp3[0].downloadInfoUrl, bitrate: mp3[0].bitrateInKbps || 0 };
+      const cap = quality === "192" ? 192 : Infinity;
+      const pick = mp3.find((x) => (x.bitrateInKbps || 0) <= cap) || mp3[mp3.length - 1];
+      return { url: pick.downloadInfoUrl, bitrate: pick.bitrateInKbps || 0 };
     } catch (e) {
       if (e.status === 403) return { error: "трек недоступен по вашей подписке", final: true };
       if (e.status === 404) return { error: "трек не найден", final: true };
@@ -300,13 +303,13 @@
     }
   }
 
-  async function links(ids) {
+  async function links(ids, quality) {
     const out = {};
     let next = 0;
     async function worker() {
       while (next < ids.length) {
         const id = ids[next++];
-        out[id] = await linkFor(id);
+        out[id] = await linkFor(id, quality);
       }
     }
     await Promise.all(Array.from({ length: Math.min(LINKS_PARALLEL, ids.length) }, worker));
@@ -329,7 +332,7 @@
     chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
       if (msg.cmd === "albums") return answer(listAlbums(msg.artist), reply), true;
       if (msg.cmd === "playlists") return answer(listPlaylists(msg.owner), reply), true;
-      if (msg.cmd === "links") return answer(links(msg.ids || []).then((l) => ({ links: l })), reply), true;
+      if (msg.cmd === "links") return answer(links(msg.ids || [], msg.quality).then((l) => ({ links: l })), reply), true;
       if (msg.cmd === "ping") return reply({ ok: true }), false;
       if (msg.cmd !== "collect") return;
       reply({ ok: true });
