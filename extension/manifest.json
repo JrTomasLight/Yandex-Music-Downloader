@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Yandex Music Downloader",
+  "version": "0.1.0",
+  "description": "Скачивает альбомы, плейлисты и треки Яндекс Музыки, доступные по вашей подписке, в выбранную папку.",
+  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Yandex Music Downloader",
+    "default_icon": { "16": "icons/16.png", "48": "icons/48.png" }
+  },
+  "background": { "service_worker": "background.js" },
+  "permissions": ["storage", "unlimitedStorage", "scripting", "activeTab", "contextMenus", "alarms", "notifications"],
+  "host_permissions": [
+    "https://music.yandex.ru/*",
+    "https://music.yandex.by/*",
+    "https://music.yandex.kz/*",
+    "https://music.yandex.uz/*",
+    "https://music.yandex.com/*",
+    "https://api.github.com/*",
+    "https://github.com/*",
+    "https://*.githubusercontent.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://music.yandex.ru/*",
+        "https://music.yandex.by/*",
+        "https://music.yandex.kz/*",
+        "https://music.yandex.uz/*",
+        "https://music.yandex.com/*"
+      ],
+      "js": ["common.js", "button.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

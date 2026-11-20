@@ -1,0 +1,65 @@
+# Автоматический релиз: при отправке тега с версией (например 1.1.1 или v1.1.1)
+# собирает zip расширения и публикует релиз на GitHub с описанием из CHANGELOG.md.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]*"
+      - "[0-9]*"
+
+permissions:
+  contents: write
+
+# Начало имени архива (то же, что ZIP_PREFIX в extension/update.js) и заголовок релиза
+env:
+  ZIP_PREFIX: yandex-music-downloader
+  TITLE: Yandex Music Downloader
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Сверить тег с версией в manifest.json
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VER="$(jq -r .version extension/manifest.json)"
+          # тег 1.1 подходит к версии 1.1.0
+          if [ "$TAG" != "$VER" ] && [ "$TAG.0" != "$VER" ]; then
+            echo "::error::Тег $GITHUB_REF_NAME не совпадает с версией $VER в extension/manifest.json. Поменяйте версию в manifest.json или тег."
+            exit 1
+          fi
+          echo "VER=$VER" >> "$GITHUB_ENV"
+
+      - name: Собрать архив
+        run: |
+          ZIP="$ZIP_PREFIX-$VER.zip"
+          (cd extension && zip -r -X "../$ZIP" .)
+          zip -X "$ZIP" README.md
+          unzip -l "$ZIP"
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+
+      - name: Взять описание релиза из CHANGELOG.md
+        run: |
+          # всё, что под заголовком «## <версия>», до следующего «## »
+          awk -v v="$VER" '
+            /^## / { if (p) exit; split($0, h, " "); if (h[2] == v) { p = 1; next } }
+            p
+          ' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::В CHANGELOG.md нет раздела «## $VER». Добавьте описание версии и отправьте тег заново."
+            exit 1
+          fi
+          # одинаковый для всех релизов блок установки и обновления
+          sed "s/{VERSION}/$VER/g" .github/release-template.md >> notes.md
+          cat notes.md
+
+      - name: Опубликовать релиз
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "$ZIP" \
+            --title "$TITLE $VER" \
+            --notes-file notes.md
