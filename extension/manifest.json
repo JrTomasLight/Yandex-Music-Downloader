@@ -17,6 +17,7 @@
     "https://music.yandex.kz/*",
     "https://music.yandex.uz/*",
     "https://music.yandex.com/*",
+    "https://*.yandex.net/*",
     "https://api.github.com/*",
     "https://github.com/*",
     "https://*.githubusercontent.com/*"

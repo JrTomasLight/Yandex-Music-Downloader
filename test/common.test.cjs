@@ -19,6 +19,9 @@ test("parseLink: альбомы, треки, исполнители, плейл�
     ["https://music.yandex.ru/users/%D0%B8%D0%BC%D1%8F/playlists/3", { kind: "playlist", owner: "имя", playlist: "3" }],
     ["https://music.yandex.ru/playlists/lk.0f1e2d3c-aaaa-bbbb", { kind: "playlist", uuid: "lk.0f1e2d3c-aaaa-bbbb" }],
     ["https://next.music.yandex.ru/album/9", { kind: "album", album: "9" }],
+    ["https://music.yandex.ru/collection", { kind: "collection" }],
+    ["https://music.yandex.ru/collection/playlists", { kind: "collection" }],
+    ["https://music.yandex.ru/users/Some.User/playlists", { kind: "collection", owner: "Some.User" }],
   ];
   for (const [url, want] of cases) assert.deepEqual({ ...EXT.parseLink(url) }, want, url);
 });
@@ -26,7 +29,7 @@ test("parseLink: альбомы, треки, исполнители, плейл�
 test("parseLink: чужие и пустые ссылки — null", () => {
   for (const url of [
     "", null, "https://example.com/album/1", "https://yandex.ru/album/1", "https://music.yandex.ru/",
-    "https://music.yandex.ru/album/abc", "https://music.yandex.ru/home", "https://music.yandex.ru/users/x/playlists",
+    "https://music.yandex.ru/album/abc", "https://music.yandex.ru/home", "https://music.yandex.ru/users/x",
     "https://music.yandex.ru.evil.com/album/1", "not a url at all",
   ]) assert.equal(EXT.parseLink(url), null, String(url));
 });
@@ -67,4 +70,18 @@ test("isActive: застывшие этапы не считаются идущи
   assert.equal(EXT.isActive({ phase: "folder", at: 1 }), true);
   assert.equal(EXT.isActive({ phase: "done", at: now }), false);
   assert.equal(EXT.isActive(null), false);
+});
+
+test("linkUrl и coverUrl", () => {
+  for (const url of ["https://music.yandex.ru/album/1", "https://music.yandex.ru/album/1/track/2", "https://music.yandex.ru/track/2",
+    "https://music.yandex.ru/artist/3", "https://music.yandex.ru/playlists/lk.abc", "https://music.yandex.ru/users/u/playlists/7"]) {
+    assert.equal(EXT.linkUrl(EXT.parseLink(url)), url);
+  }
+  assert.equal(EXT.coverUrl("avatars.yandex.net/get-music-content/1/a/%%"), "https://avatars.yandex.net/get-music-content/1/a/1000x1000");
+  assert.equal(EXT.coverUrl("avatars.yandex.net/x/%%", "200x200"), "https://avatars.yandex.net/x/200x200");
+  assert.equal(EXT.coverUrl(null), null);
+  assert.equal(EXT.plural(1, "трек", "трека", "треков"), "трек");
+  assert.equal(EXT.plural(3, "трек", "трека", "треков"), "трека");
+  assert.equal(EXT.plural(11, "трек", "трека", "треков"), "треков");
+  assert.equal(EXT.plural(22, "трек", "трека", "треков"), "трека");
 });

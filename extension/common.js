@@ -56,7 +56,9 @@ self.EXT = (() => {
   //   исполнитель /artist/<id>[/tracks|/albums…]    → { kind: "artist", artist }
   //   плейлист    /users/<логин>/playlists/<номер>  → { kind: "playlist", owner, playlist }
   //               /playlists/<uuid>                 → { kind: "playlist", uuid }
-  // TODO: сверить с живым сайтом (новый интерфейс, «Мне нравится», подкасты и книги) — см. PLAN.md.
+  //                 (в том числе «Мне нравится»: /playlists/lk.<uuid>)
+  //   коллекция   /collection…, /users/<логин>/playlists → { kind: "collection", owner? } — свои плейлисты списком
+  // Сверено с сайтом в ноябре 2026: новый интерфейс использует /album/…/track/… и /playlists/<uuid>.
   function parseLink(url) {
     const u = toURL(url);
     if (!u || !isMusicHost(u.hostname)) return null;
@@ -72,8 +74,34 @@ self.EXT = (() => {
       return { kind: "playlist", owner: p[1], playlist: p[3] };
     }
     if (p[0] === "playlists" && SLUG.test(p[1] || "")) return { kind: "playlist", uuid: p[1] };
+    if (p[0] === "users" && p[1] && p[2] === "playlists" && !p[3]) return { kind: "collection", owner: p[1] };
+    if (p[0] === "collection") return { kind: "collection" };
     return null;
   }
+
+  // Адрес страницы на сайте по разобранной ссылке — для «Мои загрузки» и ссылок в описаниях.
+  function linkUrl(l) {
+    const base = "https://music.yandex.ru";
+    if (l.kind === "album") return `${base}/album/${l.album}`;
+    if (l.kind === "track") return l.album ? `${base}/album/${l.album}/track/${l.track}` : `${base}/track/${l.track}`;
+    if (l.kind === "artist") return `${base}/artist/${l.artist}`;
+    if (l.kind === "playlist") {
+      return l.uuid ? `${base}/playlists/${l.uuid}` : `${base}/users/${encodeURIComponent(l.owner)}/playlists/${l.playlist}`;
+    }
+    return base + "/collection";
+  }
+
+  // Обложка: сайт отдаёт адрес вида avatars.yandex.net/get-music-content/…/%% — вместо %% подставляется размер.
+  function coverUrl(uri, size = "1000x1000") {
+    if (!uri) return null;
+    return "https://" + String(uri).replace(/^https?:\/\//, "").replace("%%", size);
+  }
+
+  // 1 трек, 2 трека, 5 треков
+  const plural = (n, one, few, many) => {
+    const a = n % 10, b = n % 100;
+    return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many;
+  };
 
   // Ключ задачи — одинаковый для всех вариантов ссылки на одно и то же: разные домены, регистр логина,
   // трек по адресу альбома и сам по себе. По нему кнопка на сайте, очередь и списки узнают одно и то же.
@@ -101,5 +129,5 @@ self.EXT = (() => {
     return RESERVED.test(s) ? "_" + s : s;
   }
 
-  return { ACTIVE, STALE_MS, isActive, isMusicHost, pathParts, parseLink, keyOfLink, keyOf, safeName };
+  return { ACTIVE, STALE_MS, isActive, isMusicHost, pathParts, parseLink, keyOfLink, keyOf, linkUrl, coverUrl, plural, safeName };
 })();

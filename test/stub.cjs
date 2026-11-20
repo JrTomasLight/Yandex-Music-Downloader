@@ -147,6 +147,7 @@ function memoryDir(name = "root", failOn = () => false, prefix = "") {
           return {
             write: async (d) => {
               if (failOn(prefix + n)) throw new Error("запись запрещена: " + prefix + n);
+              if (d && typeof d.arrayBuffer === "function") d = new Uint8Array(await d.arrayBuffer()); // Blob, File
               parts.push(typeof d === "string" ? new TextEncoder().encode(d) : new Uint8Array(d.buffer ? d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength) : d));
             },
             close: async () => { e.data = new Uint8Array(await new Blob(parts).arrayBuffer()); },
@@ -171,7 +172,7 @@ function memoryDir(name = "root", failOn = () => false, prefix = "") {
 function dumpDir(dir, prefix = "", out = {}) {
   for (const [n, e] of dir._map) {
     if (e.kind === "directory") dumpDir(e, prefix + n + "/", out);
-    else out[prefix + n] = new TextDecoder().decode(e.data);
+    else out[prefix + n] = new TextDecoder("utf-8", { ignoreBOM: true }).decode(e.data); // метку BOM оставляем видимой
   }
   return out;
 }

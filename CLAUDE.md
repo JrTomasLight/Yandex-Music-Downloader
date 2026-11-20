@@ -40,20 +40,53 @@
 - `manifest.json` — версия расширения (единственное место, где она задаётся; страницы читают её оттуда).
   Поле `name` не менять: по нему обновление узнаёт папку и архив своего расширения.
 - `common.js` — общее для всех частей: этапы задач (`ACTIVE`, `isActive`), разбор ссылок Яндекс Музыки
-  (`parseLink` → альбом / трек / исполнитель / плейлист), ключ задачи (`keyOf`), `safeName`.
-  Подключается в background (`importScripts`), на страницах, в manifest перед скриптом кнопки и вместе с `content.js`;
+  (`parseLink` → album / track / artist / playlist / collection), ключ задачи (`keyOf`, `keyOfLink`: `album/<id>`,
+  `track/<id>`, `playlists/<uuid>`, `users/<логин>/playlists/<номер>`), `linkUrl`, `coverUrl`, `plural`, `safeName`.
+  Подключается в background (`importScripts`), на страницах, в manifest перед `button.js` и вместе с `content.js`;
   поэтому без объявлений верхнего уровня (`self.EXT = …`).
-- `update.js` — обновление в один клик с GitHub (готово, настроено на репозиторий и архив `yandex-music-downloader-<версия>.zip`).
-- Ещё не написаны (см. `PLAN.md`): `background.js`, `content.js`, `button.js` (кнопка на сайте),
-  `downloader.html/js` (вкладка загрузок), `popup.html/js`. Пока их нет, manifest ссылается на отсутствующие файлы
-  и расширение в браузер не загрузится.
+- `background.js` — разбор ссылок (`classify`), вкладка сайта (`siteTab`: открытая или своя фоновая, закрывается
+  через минуту простоя), внедрение `content.js`, очередь `pending` (`editPending`), сообщения `download`, `inspect`,
+  `listAlbums`, `listPlaylists`, `links`, `queueLinks`, `collected`, `taken`, `reorder`, `open`, `checkUpdate`,
+  `installing`; меню правой кнопки. Исполнитель и коллекция не собираются, а передаются во вкладку загрузок
+  на выбор (`pickLink` в storage).
+- `content.js` — внедряется во вкладку сайта: `api()` (тайм-аут, повторы, долгая пауза на 429), сбор альбома,
+  плейлиста, треков, списки альбомов исполнителя и своих плейлистов, ссылки на файлы (`links`).
+- `button.js` — кнопка «Скачать» в шапке (`[class*="CommonPageHeader_controls__"]`) сразу после «Трейлер»/«Слушать»,
+  с классами кнопки «Трейлер»; прогресс по `job:<ключ>`. На `/album/X/track/Y` качает альбом X.
+- `files.js` — без интерфейса, проверяется в Node: `syncFolder` (сверка с `_сведения/info.json`, перенумерация
+  через временные имена, убранные — в `_убраны из плейлиста`/`_убраны из альбома`), `writeInfo` (info.json, readme,
+  `.m3u8` плейлиста), `buildId3` (ID3v2.3, UTF-16, APIC), `id3Skipper` (вырезает тег источника из потока).
+- `downloader.html/js` — вкладка загрузок: папка (IndexedDB «ymd»), `downloadItem` (сверка → ссылки пачками по
+  `LINK_BATCH` → по `PARALLEL` треков → `_сведения`), очередь, замок `ymd-queue`, уведомления, обновление.
+- `library.js` — поле ссылок (несколько сразу; исполнитель и «Мои плейлисты» → список с галочками) и «Мои загрузки»
+  (папки с `_сведения/info.json` на глубине до двух уровней).
+- `popup.html/js` — окно по кнопке расширения.
+- `update.js` — обновление в один клик с GitHub (архив `yandex-music-downloader-<версия>.zip`).
+
+Формат собранной задачи (`pending[].data`): `{ id, kind: album|playlist|tracks, title, artist|owner, year, root, url,
+cover, found, expected, single?, tracks: [{ id, n, stem, title, artists, album, albumArtist, year, disc, discTotal,
+track, trackTotal, cover, durationMs, link, unavailable? }] }`. `stem` — имя файла без `.mp3`.
+
+## API сайта (сверено в ноябре 2026)
+Запросы — из вкладки сайта на `https://api.music.yandex.ru` с `credentials: "include"`; ответ `{ result }`.
+- `GET /account/about` → `uid`, `login`, `hasPlus` (без `uid` — не вошли).
+- `GET /albums/<id>/with-tracks?resumeStream=false&richTracks=true` → `volumes: [[track]]`, `artists`, `year`,
+  `version`, `coverUri` (`avatars.yandex.net/…/%%`, вместо `%%` — размер, например `1000x1000`). Без `richTracks`
+  в `volumes` только id.
+- `GET /playlist/<uuid>?resumeStream=false&richTracks=true` и `GET /users/<uid|логин>/playlists/<номер>?richTracks=true`
+  → `title`, `trackCount`, `playlistUuid`, `tracks: [{ id, track? }]`. «Мне нравится» — номер 3.
+- `POST /tracks` (`track-ids=1,2&with-positions=true`) → описания треков пачкой.
+- `GET /users/<uid>/playlists/list` → свои плейлисты (без «Мне нравится»).
+- `GET /artists/<id>/direct-albums?page=&page-size=100&sort-by=year`, `/also-albums` (сборники), `/brief-info`.
+- `GET /tracks/<id>/download-info?direct=true` → `[{ codec, bitrateInKbps, direct, downloadInfoUrl }]`;
+  при `direct=true` `downloadInfoUrl` — готовая подписанная ссылка на mp3 (`*.strm.yandex.net`), живёт дни.
+  Нет прав — `403 { message: "no-rights" }`. Плеер сайта использует другое — `get-file-info` с `transports=encraw`
+  (зашифрованные потоки); его не трогать.
+- Трек недоступен: `available: false` (`availableForPremiumUsers` — есть в подписке выше).
 
 ## Образец для переноса (`reference/`)
-Локальная папка, в git не входит (`.gitignore`). В `reference/sample/` — исходник рабочего
-расширения-загрузчика с другого сайта, из которого переносится ядро, не зависящее от сайта: папка, скачивание,
-очередь, повторное скачивание, фоновый скрипт, вкладка загрузок. Карта «что где лежит» — `reference/PORTING.md`.
-Переносить по смыслу, а не копировать файл целиком: всё, что про тот сайт, заменяется своим, упоминаний
-о нём в коде и текстах проекта быть не должно. Когда ядро перенесено, папку `reference/` удалить.
+Локальная папка, в git не входит (`.gitignore`): исходник расширения-загрузчика, с которого перенесено ядро.
+Карта — `reference/PORTING.md`. Удалить перед релизом 0.1.0.
 
 ## Грабли, на которые уже наступили
 - `display:flex` (и любой `display`) у блока перебивает атрибут `hidden` — в стилях страниц всегда
@@ -92,14 +125,17 @@
 
 Тесты (`test/`): `stub.cjs` — заглушки `chrome.*` (storage с `onChanged`, события, `message` как от браузера),
 `loadScripts` (файлы расширения в один `vm`-контекст, как `importScripts`), `memoryDir` (папка в памяти
-с интерфейсом File System Access). На каждую перенесённую часть — свой `<часть>.test.cjs`; сценарии, которые
-обязательно покрыть, перечислены в `PLAN.md`. Ответы сайта в тестах — поддельный `fetch` по образцу
-настоящих ответов (сохранять их в `test/fixtures/`, без личных данных и токенов).
+с интерфейсом File System Access). Ответы сайта в `content.test.cjs` — поддельный `fetch` по образцу настоящих
+(без личных данных и токенов).
 
-Логику страниц проверять на стенде: `test/stand/srv.py` (локальный сервер, умеет медленные, зависающие
-ответы и коды ошибок), страница-стенд с заглушкой `chrome` (`new Function('chrome', code)`), папка — OPFS
-(`navigator.storage.getDirectory()`); `test/stand/zombie.html` — вкладка, которая держит замок очереди.
-Поведение под входом на Яндекс Музыке подтверждает пользователь. Временные `.claude/launch.json` после проверки удалять.
+Вкладку загрузок проверять на стенде `test/stand/downloader.html`: `python -I test/stand/srv.py . 8765`
+(локальный сервер: `/slow/`, `/stall/`, `/status/<код>/`), страница — настоящие `downloader.html/js`, `files.js`,
+`library.js` с заглушкой `chrome` одной функцией, папка — OPFS. В консоли: `await stand.album()`,
+`await stand.album(stand.albumData(["6","1"]))` (новый порядок), `await stand.files()`.
+`test/stand/zombie.html` — вкладка, которая держит замок очереди.
+`content.js` на живом сайте: страница не даёт загрузить скрипт с localhost (CSP) — код вставляется прямо
+в `javascript_tool` с заглушкой `chrome`. Не включать воспроизведение треков.
+Поведение под входом подтверждает пользователь. Временные `.claude/launch.json` после проверки удалять.
 
 ## Релиз
 Автоматический (`.github/workflows/release.yml`), подробно — в `RELEASING.md`:
@@ -108,5 +144,7 @@
    без инструкции по установке — её добавляет workflow из `.github/release-template.md`.
 3. Коммит, `git push`, затем `git tag <версия>` и `git push origin <версия>`.
 Workflow сверяет тег с версией, собирает `yandex-music-downloader-<версия>.zip` и публикует релиз с текстом из CHANGELOG.
+Пререлиз — тег с суффиксом: `0.1.0-beta.1` (версия в manifest — `0.1.0`); он публикуется как pre-release
+и не предлагается обновлением (`/releases/latest` пререлизы не отдаёт).
 Архивы `*.zip` в репозиторий не коммитятся. Теги без `v`.
 В архиве релиза `manifest.json` должен лежать в корне — на этом держится обновление в один клик.

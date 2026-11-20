@@ -9,6 +9,14 @@ os.chdir(sys.argv[1])
 PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 8765
 class H(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
+    def end_headers(self):
+        # стенд можно подключить к странице сайта (проверка content.js на живом API)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+    def do_OPTIONS(self):
+        self.send_response(204); self.send_header("Access-Control-Allow-Headers", "*"); self.end_headers()
     def do_GET(self):
         if self.path.startswith("/stall/"):
             self.send_response(200); self.send_header("Content-Length", "100000"); self.end_headers()

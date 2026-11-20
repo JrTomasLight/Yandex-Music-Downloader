@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<style>
+  [hidden] { display:none !important; }
+  :root { --bg:#fff; --fg:#111; --muted:#666; --line:#ddd; --field:#f3f3f3; --accent:#ffcc00; --on-accent:#151515;
+          --warn:#a15c00; --ok:#1a7f37; --ok-soft:#e3f4e8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1d1d1d; --fg:#eee; --muted:#aaa; --line:#3a3a3a; --field:#2a2a2a; --warn:#f0b35a; --ok:#5fd27a; --ok-soft:#163020; }
+  }
+  body { margin:0; width:330px; background:var(--bg); color:var(--fg); font:13px/1.4 system-ui, sans-serif; }
+  main { padding:14px; }
+  header { display:flex; align-items:center; gap:8px; margin:0 0 12px; }
+  h1 { font-size:15px; margin:0; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ver { font-size:11px; font-weight:600; color:var(--muted); background:var(--field); border-radius:999px; padding:2px 7px; flex:none; }
+  button { font:inherit; border:0; border-radius:20px; padding:9px 14px; cursor:pointer; }
+  button:disabled { opacity:.45; cursor:default; }
+  #go { width:100%; background:var(--accent); color:var(--on-accent); font-weight:600; }
+  .or { color:var(--muted); margin:12px 0 6px; }
+  form { display:flex; gap:6px; }
+  input { flex:1; min-width:0; font:inherit; color:var(--fg); background:var(--field); border:1px solid var(--line);
+          border-radius:20px; padding:8px 12px; outline:none; }
+  input:focus { border-color:var(--accent); }
+  #paste { background:var(--accent); color:var(--on-accent); font-weight:600; }
+  .link { background:none; color:var(--muted); padding:4px 0; text-decoration:underline; }
+  .hint { color:var(--muted); margin:8px 0 0; }
+  .err { color:var(--warn); margin:8px 0 0; }
+  .hint:empty, .err:empty { display:none; }
+  .upd { width:100%; margin:0 0 10px; padding:8px 12px; border-radius:12px; text-align:left;
+         background:var(--ok-soft); color:var(--ok); border:1px solid var(--ok); font-weight:600; }
+  .upd small { display:block; font-weight:400; color:var(--muted); }
+  footer { display:flex; justify-content:space-between; align-items:center; margin-top:12px; padding-top:10px; border-top:1px solid var(--line); }
+  a.link { font-size:13px; }
+  a.link:hover, .link:hover { color:var(--fg); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="icons/48.png" alt="" width="24" height="24">
+    <h1>Yandex Music Downloader</h1>
+    <span class="ver" id="ver"></span>
+  </header>
+  <button id="upd" class="upd" type="button" hidden></button>
+  <button id="go" hidden></button>
+  <p id="hint" class="hint"></p>
+  <p class="or">Ссылка на альбом, плейлист, трек или исполнителя:</p>
+  <form id="form">
+    <input id="url" type="text" placeholder="https://music.yandex.ru/album/…" autocomplete="off" spellcheck="false">
+    <button id="paste" type="submit">Скачать</button>
+  </form>
+  <p id="collecting" class="hint"></p>
+  <p id="error" class="err"></p>
+  <footer>
+    <button id="open" class="link">Открыть вкладку загрузок</button>
+    <a id="repo" class="link" target="_blank" rel="noopener">GitHub</a>
+  </footer>
+</main>
+<script src="common.js"></script>
+<script src="update.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

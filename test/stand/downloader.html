@@ -1,0 +1,159 @@
+<!doctype html><meta charset="utf-8">
+<title>Стенд вкладки загрузок</title>
+<!-- Стенд вкладки загрузок: настоящие downloader.html/js, files.js и library.js с заглушкой chrome,
+     папка — OPFS браузера, файлы треков — с локального сервера test/stand/srv.py.
+     Запуск: python -I test/stand/srv.py . 8765 → http://127.0.0.1:8765/test/stand/downloader.html
+     В консоли: await stand.album() — альбом в очередь; await stand.files() — что лежит в папке. -->
+<body></body>
+<script>
+const B = location.origin;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const store = { pending: [] };
+const listeners = [];
+window.__log = [];
+const fire = (ch) => listeners.forEach((f) => f(ch, "local"));
+const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
+
+// треки поддельного альбома: обычный, медленный, без прав, недоступный на сайте, обрыв посреди файла
+const TRACKS = [
+  { id: "1", title: "Первая", url: "/test/stand/media/a.mp3" },
+  { id: "2", title: "Медленная", url: "/slow/x.mp3" },
+  { id: "3", title: "Без прав", final: "трек недоступен по вашей подписке" },
+  { id: "4", title: "Удалённая", unavailable: "трек недоступен на Яндекс Музыке" },
+  { id: "5", title: "Оборвётся", url: "/stall/x.mp3" },
+  { id: "6", title: "Вторая", url: "/test/stand/media/b.mp3" },
+];
+function album(order = TRACKS.map((t) => t.id), id = "77") {
+  const list = order.map((tid) => TRACKS.find((t) => t.id === tid));
+  return {
+    id: "album/" + id, kind: "album", title: "Тестовый альбом", artist: "Тест", year: 2020,
+    root: "Тест/2020 - Тестовый альбом", url: "https://music.yandex.ru/album/" + id, cover: null,
+    found: list.length, expected: list.length,
+    tracks: list.map((t, i) => ({
+      id: t.id, n: i + 1, title: t.title, artists: "Тест", album: "Тестовый альбом", albumArtist: "Тест", year: 2020,
+      disc: 1, discTotal: 1, track: i + 1, trackTotal: list.length, stem: String(i + 1).padStart(2, "0") + ". " + t.title,
+      unavailable: t.unavailable || null, durationMs: 1000,
+    })),
+  };
+}
+
+const stub = {
+  runtime: {
+    getURL: (p) => "/extension/" + p, getManifest: () => ({ version: "0.1.0", name: "Yandex Music Downloader" }), reload() {},
+    sendMessage: async (m) => {
+      __log.push("msg " + m.type);
+      if (m.type === "checkUpdate") return {};
+      if (m.type === "links") {
+        const links = {};
+        for (const id of m.ids) {
+          const t = TRACKS.find((x) => x.id === id);
+          links[id] = t.final ? { error: t.final, final: true } : { url: B + t.url, bitrate: 320 };
+        }
+        await sleep(30);
+        return { links };
+      }
+      if (m.type === "queueLinks") {
+        let n = 0;
+        for (const it of m.items) {
+          if (store.pending.some((p) => p.job === it.job)) continue;
+          store.pending.push({ key: "link-" + Date.now() + "-" + n++, link: it.url, job: it.job, title: it.title });
+        }
+        await stub.storage.local.set({ pending: store.pending });
+        return { added: n, skipped: m.items.length - n };
+      }
+      if (m.type === "download") {
+        await stub.storage.local.set({ ["job:" + m.job]: { phase: "collect", text: "Ищу треки…", at: Date.now() } });
+        setTimeout(async () => {
+          const slot = store.pending.find((p) => p.job === m.job && !p.data);
+          if (slot) { slot.data = window.__nextData || album(); delete slot.link; }
+          await stub.storage.local.set({ pending: store.pending, ["job:" + m.job]: { phase: "queued", at: Date.now() } });
+        }, 300);
+        return { ok: true, job: m.job };
+      }
+      if (m.type === "taken") {
+        store.pending = store.pending.filter((p) => p.key !== m.key);
+        await stub.storage.local.set({ pending: store.pending });
+        return { ok: true };
+      }
+      if (m.type === "inspect") {
+        const l = EXT.parseLink(m.url);
+        if (!l) return { error: "Это не ссылка на Яндекс Музыку." };
+        return { ...l, label: { album: "Альбом", playlist: "Плейлист", track: "Трек", artist: "Исполнитель", collection: "Плейлисты" }[l.kind], job: EXT.keyOfLink(l) };
+      }
+      if (m.type === "listAlbums") {
+        await sleep(200);
+        return { artist: "Тест", albums: [
+          { id: "77", title: "Тестовый альбом", year: 2020, type: "album", tracks: 6, url: "https://music.yandex.ru/album/77" },
+          { id: "78", title: "Сингл", year: 2021, type: "single", tracks: 1, url: "https://music.yandex.ru/album/78" },
+          { id: "79", title: "Сборник хитов", year: 2019, type: "compilation", tracks: 20, also: true, url: "https://music.yandex.ru/album/79" },
+        ] };
+      }
+      return { ok: true };
+    },
+  },
+  notifications: { create: (id, o, cb) => cb && cb(), onClicked: { addListener() {} }, clear() {} },
+  tabs: { getCurrent: async () => null },
+  storage: {
+    local: {
+      get: async (k) => {
+        const keys = k == null ? Object.keys(store) : Array.isArray(k) ? k : [k];
+        const o = {};
+        for (const kk of keys) if (kk in store) o[kk] = clone(store[kk]);
+        return o;
+      },
+      set: async (o) => {
+        const ch = {};
+        for (const [k, v] of Object.entries(o)) {
+          store[k] = clone(v);
+          ch[k] = { newValue: clone(v) };
+          if (k.startsWith("job:")) __log.push(k + " " + v.phase);
+        }
+        fire(ch);
+      },
+      remove: async (k) => { for (const x of [].concat(k)) delete store[x]; },
+    },
+    onChanged: { addListener: (f) => listeners.push(f), removeListener: (f) => { const i = listeners.indexOf(f); if (i >= 0) listeners.splice(i, 1); } },
+  },
+};
+window.prompt = () => null;
+
+window.stand = {
+  album: (data) => {
+    window.__nextData = data || album();
+    return stub.runtime.sendMessage({ type: "queueLinks", items: [{ url: (data || album()).url, job: (data || album()).id, title: "Тестовый альбом" }] });
+  },
+  albumData: album,
+  store,
+  async files(dir, prefix = "") {
+    dir = dir || (await navigator.storage.getDirectory());
+    const out = {};
+    for await (const [n, h] of dir.entries()) {
+      if (h.kind === "directory") Object.assign(out, await stand.files(h, prefix + n + "/"));
+      else out[prefix + n] = (await h.getFile()).size;
+    }
+    return out;
+  },
+  async bytes(path) {
+    let d = await navigator.storage.getDirectory();
+    const parts = path.split("/");
+    for (const p of parts.slice(0, -1)) d = await d.getDirectoryHandle(p);
+    return new Uint8Array(await (await (await d.getFileHandle(parts.at(-1))).getFile()).arrayBuffer());
+  },
+};
+
+(async () => {
+  const html = await (await fetch("/extension/downloader.html?" + Date.now())).text();
+  document.head.insertAdjacentHTML("beforeend", html.match(/<style>[\s\S]*<\/style>/)[0]);
+  document.body.innerHTML = html.match(/<main>[\s\S]*<\/main>/)[0].replace(/src="icons\//g, 'src="/extension/icons/');
+  const src = async (f) => (await fetch("/extension/" + f + "?" + Date.now())).text();
+  const opfs = await navigator.storage.getDirectory();
+  for await (const [n] of opfs.entries()) await opfs.removeEntry(n, { recursive: true });
+  let dl = await src("downloader.js");
+  dl = dl.replace('const loadRoot = () => idb("readonly", (s) => s.get("root"));',
+    'const loadRoot = async () => { const d = await navigator.storage.getDirectory(); d.queryPermission = async () => "granted"; Object.defineProperty(d, "name", { value: "Музыка" }); return d; };')
+    .replace("const STALL_TIMEOUT = 45000;", "const STALL_TIMEOUT = 2000;");
+  const code = [await src("common.js"), await src("update.js"), await src("files.js"), dl, await src("library.js")].join("\n;\n");
+  new Function("chrome", code)(stub);
+  window.__ready = true;
+})();
+</script>

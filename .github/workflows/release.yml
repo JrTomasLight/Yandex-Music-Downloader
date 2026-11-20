@@ -1,5 +1,6 @@
 # Автоматический релиз: при отправке тега с версией (например 1.1.1 или v1.1.1)
 # собирает zip расширения и публикует релиз на GitHub с описанием из CHANGELOG.md.
+# Тег с суффиксом (0.1.0-beta.1) — пререлиз для проверки: версия в manifest.json та же, без суффикса.
 name: Release
 
 on:
@@ -25,17 +26,25 @@ jobs:
       - name: Сверить тег с версией в manifest.json
         run: |
           TAG="${GITHUB_REF_NAME#v}"
+          BASE="${TAG%%-*}"   # 0.1.0-beta.1 → 0.1.0
           VER="$(jq -r .version extension/manifest.json)"
           # тег 1.1 подходит к версии 1.1.0
-          if [ "$TAG" != "$VER" ] && [ "$TAG.0" != "$VER" ]; then
+          if [ "$BASE" != "$VER" ] && [ "$BASE.0" != "$VER" ]; then
             echo "::error::Тег $GITHUB_REF_NAME не совпадает с версией $VER в extension/manifest.json. Поменяйте версию в manifest.json или тег."
             exit 1
           fi
           echo "VER=$VER" >> "$GITHUB_ENV"
+          if [ "$TAG" != "$BASE" ]; then
+            echo "NAME=$VER${TAG#$BASE}" >> "$GITHUB_ENV"
+            echo "PRE=--prerelease" >> "$GITHUB_ENV"
+          else
+            echo "NAME=$VER" >> "$GITHUB_ENV"
+            echo "PRE=" >> "$GITHUB_ENV"
+          fi
 
       - name: Собрать архив
         run: |
-          ZIP="$ZIP_PREFIX-$VER.zip"
+          ZIP="$ZIP_PREFIX-$NAME.zip"
           (cd extension && zip -r -X "../$ZIP" .)
           zip -X "$ZIP" README.md
           unzip -l "$ZIP"
@@ -53,7 +62,7 @@ jobs:
             exit 1
           fi
           # одинаковый для всех релизов блок установки и обновления
-          sed "s/{VERSION}/$VER/g" .github/release-template.md >> notes.md
+          sed "s/{VERSION}/$NAME/g" .github/release-template.md >> notes.md
           cat notes.md
 
       - name: Опубликовать релиз
@@ -61,5 +70,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" "$ZIP" \
-            --title "$TITLE $VER" \
-            --notes-file notes.md
+            --title "$TITLE $NAME" \
+            --notes-file notes.md $PRE
